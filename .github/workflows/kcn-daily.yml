@@ -36,6 +36,19 @@ jobs:
             if (!identity.ok) throw new Error('IDENTITY_UNAVAILABLE');
             const { value: token } = await identity.json();
             if (typeof token !== 'string') throw new Error('IDENTITY_UNAVAILABLE');
+            const claims = JSON.parse(Buffer.from(token.split('.')[1], 'base64url').toString());
+            if (!body.runId) console.log('Identity checks', JSON.stringify({
+              issuer: claims.iss === 'https://token.actions.githubusercontent.com',
+              audience: claims.aud === endpoint,
+              repository: claims.repository === 'g1yun85/G1',
+              repositoryId: claims.repository_id === '1339091466',
+              ownerId: claims.repository_owner_id === '305370152',
+              workflow: claims.workflow_ref === 'g1yun85/G1/.github/workflows/kcn-daily.yml@refs/heads/main',
+              branch: claims.ref === 'refs/heads/main',
+              hosted: claims.runner_environment === 'github-hosted',
+              lifetime: claims.exp - claims.iat <= 600,
+              subject: ['repo:g1yun85/G1:ref:refs/heads/main', 'repo:g1yun85@305370152/G1@1339091466:ref:refs/heads/main'].includes(claims.sub)
+            }));
             const response = await fetch(endpoint + '?action=step', {
               method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
               body: JSON.stringify(body), signal: AbortSignal.timeout(180000), redirect: 'error'
@@ -49,7 +62,7 @@ jobs:
             let response, result;
             try { ({ response, result } = await call(body)); }
             catch { if (++failures > 3) throw new Error('REQUEST_FAILED'); await pause(15000); continue; }
-            if ([401, 403].includes(response.status)) throw new Error('AUTHORIZATION_FAILED');
+            if ([401, 403].includes(response.status)) throw new Error('AUTHORIZATION_FAILED_HTTP_' + response.status + (result.status === 'unauthorized' ? '_APP' : '_UPSTREAM'));
             if (response.status === 429) {
               const delay = Math.min(3600000, Math.max(1500, Number(result.retryAfterMs) || 1500));
               if (Date.now() + delay >= deadline) throw new Error('RUN_NOT_AVAILABLE');
