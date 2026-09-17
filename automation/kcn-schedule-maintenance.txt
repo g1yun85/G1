@@ -1,0 +1,5 @@
+KCN scheduler maintenance
+Last checked (Asia/Seoul): 2026-09-17
+Schedule: every day at 07:00 Asia/Seoul (22:00 UTC).
+This file records monthly maintenance so the public repository does not become inactive.
+No credentials, channel details or collection data belong in this repository.
