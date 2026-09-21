@@ -1,8 +1,9 @@
 name: KCN daily collection
 on:
   schedule:
-    # Asia/Seoul 07:00, every day (UTC 22:00 on the previous day).
-    - cron: '0 22 * * *'
+    # KST 05:17 primary; 06:17, 07:17, 08:17 recovery attempts.
+    # Avoid the busy top of the hour. The server replays completed daily runs.
+    - cron: '17 20-23 * * *'
   workflow_dispatch:
   push:
     branches: [main]
@@ -75,6 +76,9 @@ jobs:
             failures = 0;
             body = { runId: result.runId, cursor: result.cursor };
             if (result.done === true) {
+              // Finish a previously interrupted day, then begin the current day.
+              const today = new Date(Date.now() + 9 * 3600000).toISOString().slice(0, 10);
+              if (result.scheduleDate !== today) { body = {}; await pause(1500); continue; }
               // A repeated start must return the completed daily run, without a new collection.
               await pause(Math.min(30000, Math.max(1500, Number(result.retryAfterMs) || 1500)));
               const repeated = await call({});
@@ -83,7 +87,8 @@ jobs:
               if (!checked.response.ok || checked.result.done !== true || checked.result.runId !== result.runId) throw new Error('REPLAY_CHECK_FAILED');
               completed = true;
               console.log('Collection finished. Detailed results are stored in KCN Monitor.');
-              if (result.failureCount > 0 || result.warningCount > 0) throw new Error('COLLECTION_COMPLETED_WITH_CHANNEL_ERRORS');
+              if (result.failureCount > 0) throw new Error('COLLECTION_COMPLETED_WITH_CHANNEL_ERRORS');
+              if (result.warningCount > 0) console.log('::warning::Collection completed with channel warnings. Review KCN Monitor for details.');
               break;
             }
             await pause(Math.min(30000, Math.max(300, Number(result.retryAfterMs) || 300)));
